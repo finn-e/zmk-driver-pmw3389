@@ -553,6 +553,14 @@ static void pmw3360_read_motion_report(const struct device *dev) {
             pmw3360_spi_read_reg(dev, PMW3360_REG_CONFIG_2, &c2);
             LOG_INF("regs: pid=%02x inv=%02x rev=%02x srom_id=%02x res=%02x%02x cfg2=%02x", pid,
                     inv, rev, srom, rh, rl, c2);
+            {
+                uint8_t full[12] = {0};
+                int ferr = pmw3360_spi_read_motion_burst(dev, full, sizeof(full));
+                LOG_INF("full burst (err %d): mot=%02x obs=%02x dx=%02x%02x dy=%02x%02x squal=%02x "
+                        "rawsum=%02x rawmax=%02x rawmin=%02x shutter=%02x%02x",
+                        ferr, full[0], full[1], full[3], full[2], full[5], full[4], full[6],
+                        full[7], full[8], full[9], full[11], full[10]);
+            }
         }
     }
 #endif
