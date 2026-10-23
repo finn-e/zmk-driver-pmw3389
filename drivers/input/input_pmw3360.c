@@ -537,6 +537,26 @@ static void pmw3360_read_motion_report(const struct device *dev) {
      * PMW motion bursts per work run so one IRQ work item maps to one HID
      * report instead of a report storm.
      */
+#ifdef CONFIG_INPUT_PIXART_PMW3360_DEBUG_RAW
+    {
+        static uint32_t last_regs;
+        uint32_t now = k_uptime_get_32();
+        if (now - last_regs >= 2000) {
+            uint8_t pid = 0, inv = 0, rev = 0, srom = 0, rl = 0, rh = 0, c2 = 0;
+            last_regs = now;
+            pmw3360_spi_read_reg(dev, PMW3360_REG_PRODUCT_ID, &pid);
+            pmw3360_spi_read_reg(dev, 0x3F, &inv);
+            pmw3360_spi_read_reg(dev, PMW3360_REG_REVISION_ID, &rev);
+            pmw3360_spi_read_reg(dev, 0x2A, &srom);
+            pmw3360_spi_read_reg(dev, PMW3389_REG_RESOLUTION_L, &rl);
+            pmw3360_spi_read_reg(dev, PMW3389_REG_RESOLUTION_H, &rh);
+            pmw3360_spi_read_reg(dev, PMW3360_REG_CONFIG_2, &c2);
+            LOG_INF("regs: pid=%02x inv=%02x rev=%02x srom_id=%02x res=%02x%02x cfg2=%02x", pid,
+                    inv, rev, srom, rh, rl, c2);
+        }
+    }
+#endif
+
     for (uint8_t attempt = 0; attempt < max_samples; attempt++) {
         struct motion_burst motion_report = {};
         int err =
@@ -546,6 +566,19 @@ static void pmw3360_read_motion_report(const struct device *dev) {
             data->motion_burst_active = false;
             break;
         }
+
+#ifdef CONFIG_INPUT_PIXART_PMW3360_DEBUG_RAW
+        {
+            static uint32_t last_raw;
+            uint32_t now = k_uptime_get_32();
+            if ((motion_report.motion & PMW3360_MOTION_MOT) && now - last_raw >= 200) {
+                last_raw = now;
+                LOG_INF("raw burst: motion=%02x obs=%02x dx=%02x%02x dy=%02x%02x",
+                        motion_report.motion, motion_report.observation, motion_report.delta_x_h,
+                        motion_report.delta_x_l, motion_report.delta_y_h, motion_report.delta_y_l);
+            }
+        }
+#endif
 
         if (!(motion_report.motion & PMW3360_MOTION_MOT)) {
             break;

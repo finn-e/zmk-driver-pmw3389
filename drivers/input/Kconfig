@@ -48,3 +48,10 @@ config INPUT_PIXART_PMW3360_THREAD_STACK_SIZE
       Increase this only if debugging or future driver changes require more
       stack space. The default is intentionally modest to keep the wireless RAM
       footprint reasonable.
+
+config INPUT_PIXART_PMW3360_DEBUG_RAW
+    bool "Log raw motion bursts and identity registers (debug only)"
+    depends on INPUT_PIXART_PMW3360
+    help
+      Every 2 s log Product/Inverse/Revision ID, SROM_ID, resolution and Config2, and
+      rate-limit log the raw motion burst bytes. Debug only; it adds SPI traffic.
