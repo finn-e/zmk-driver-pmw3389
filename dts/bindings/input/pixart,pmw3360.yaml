@@ -113,3 +113,18 @@ properties:
     type: boolean
     description: |
       Invert the Y axis after all sensor rotation handling has been applied.
+
+  pmw3389:
+    type: boolean
+    description: |
+      The sensor is a PMW3389 rather than a PMW3360. Motion bursts are identical, but
+      CPI is programmed through the 16-bit Resolution_L/H registers (0x0E/0x0F) in
+      50-CPI steps up to 16000, and the rotate-* properties are ignored because 0x0D
+      is Ripple_Control on this chip. Product id 0x47 is a PMW3389, 0x42 a PMW3360.
+      No SROM firmware is uploaded.
+
+  enable-at-boot:
+    type: boolean
+    description: |
+      Power up and initialize the sensor during driver init. Without this the driver
+      stays disabled until firmware calls zmk_driver_pmw3360_set_enabled().

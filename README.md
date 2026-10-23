@@ -507,3 +507,19 @@ west build -s zmk/app -b nice_nano//zmk -- -DSHIELD=your_keyboard_right
 
 The important part is that the module is present in the workspace and imported
 via `west.yml` before building.
+
+## Fork notes (finn-e/zmk-driver-pmw3389)
+
+This fork of [mfulz/zmk-driver-pmw3360](https://github.com/mfulz/zmk-driver-pmw3360) adds
+what a PMW3389 trackball in a wired (USB) keyboard needs. Still the same driver and the same
+`pixart,pmw3360` binding, with two new boolean properties:
+
+- `pmw3389`: program CPI through the 16-bit `Resolution_L/H` registers (0x0E/0x0F) in
+  50-CPI steps up to 16000, ignore `rotate-*` (0x0D is Ripple_Control on this chip), and warn
+  if the product id read at init (0x47 = PMW3389, 0x42 = PMW3360) disagrees with the setting.
+  No SROM firmware is uploaded.
+- `enable-at-boot`: power up and initialize the sensor during driver init. Upstream leaves
+  the sensor disabled until firmware calls `zmk_driver_pmw3360_set_enabled()`, and nothing
+  in the module does, so a plain devicetree node never starts.
+
+Register map: PixArt PMW3389 datasheet, cross-checked against QMK's `pmw3389` driver.

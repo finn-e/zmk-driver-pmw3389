@@ -57,6 +57,18 @@ extern "C" {
 #define PMW3360_LIFT_CONFIG_2MM 0x02
 #define PMW3360_LIFT_CONFIG_3MM 0x03
 
+/*
+ * PMW3389 differences (register map from the PixArt datasheet, cross-checked against
+ * QMK's pmw3389 driver): CPI is a 16-bit value in 50-CPI steps split over 0x0E/0x0F
+ * (the PMW3360 has one 8-bit register at 0x0F in 100-CPI steps), and 0x0D is
+ * Ripple_Control, not the PMW3360's rotate/invert Control register.
+ */
+#define PMW3389_PRODUCT_ID 0x47
+#define PMW3389_REG_RESOLUTION_L 0x0E
+#define PMW3389_REG_RESOLUTION_H 0x0F
+#define PMW3389_CPI_STEP 50
+#define PMW3389_CPI_MAX 16000
+
 /**
  * Runtime-configurable PMW3360 sensor attributes exposed through Zephyr's
  * generic `sensor_attr_set()` entry point.
@@ -157,6 +169,10 @@ struct pmw3360_config {
     bool invert_x;
     /** Invert Y movement after orientation correction. */
     bool invert_y;
+    /** The sensor is a PMW3389: 16-bit 50-CPI resolution registers, no rotate Control. */
+    bool pmw3389;
+    /** Enable (power up and initialize) the sensor at boot instead of waiting for a caller. */
+    bool enable_at_boot;
 };
 
 #ifdef __cplusplus

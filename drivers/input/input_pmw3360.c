@@ -362,7 +362,52 @@ static uint8_t pmw3360_normalize_burst_accumulation_max_samples(uint32_t samples
  * sensor keeps the previous CONFIG_1 value. To make CPI switching truthful, we
  * write and then immediately read back CONFIG_1 under the driver's mutex.
  */
+static int pmw3389_apply_cpi_locked(const struct device *dev, const uint16_t cpi, uint16_t *applied_cpi) {
+    const uint16_t steps = CLAMP(cpi / PMW3389_CPI_STEP, 1u, PMW3389_CPI_MAX / PMW3389_CPI_STEP);
+    const uint16_t val = steps - 1u;
+
+    for (int attempt = 1; attempt <= PMW3360_CPI_WRITE_RETRIES; attempt++) {
+        /* High byte first, as QMK does, for a consistent change of resolution. */
+        int err = pmw3360_spi_write_reg(dev, PMW3389_REG_RESOLUTION_H, val >> 8);
+        if (err == 0) {
+            err = pmw3360_spi_write_reg(dev, PMW3389_REG_RESOLUTION_L, val & 0xFF);
+        }
+        if (err < 0) {
+            LOG_WRN("Failed to write CPI=%u on attempt %d: %d", cpi, attempt, err);
+            continue;
+        }
+
+        uint8_t lo = 0, hi = 0;
+        err = pmw3360_spi_read_reg(dev, PMW3389_REG_RESOLUTION_L, &lo);
+        if (err == 0) {
+            err = pmw3360_spi_read_reg(dev, PMW3389_REG_RESOLUTION_H, &hi);
+        }
+        if (err < 0) {
+            LOG_WRN("Failed to read back CPI=%u on attempt %d: %d", cpi, attempt, err);
+            continue;
+        }
+
+        const uint16_t readback = ((uint16_t)hi << 8) | lo;
+        if (readback == val) {
+            if (applied_cpi) {
+                *applied_cpi = (readback + 1u) * PMW3389_CPI_STEP;
+            }
+            return 0;
+        }
+
+        LOG_WRN("CPI write mismatch on attempt %d: wanted %u (reg=0x%04x), read reg=0x%04x",
+                attempt, cpi, val, readback);
+    }
+
+    return -EIO;
+}
+
 static int pmw3360_apply_cpi_locked(const struct device *dev, const uint16_t cpi, uint16_t *applied_cpi) {
+    const struct pmw3360_config *config = dev->config;
+    if (config->pmw3389) {
+        return pmw3389_apply_cpi_locked(dev, cpi, applied_cpi);
+    }
+
     const uint8_t expected_reg = pmw3360_config_1_reg_from_cpi(cpi);
 
     for (int attempt = 1; attempt <= PMW3360_CPI_WRITE_RETRIES; attempt++) {
@@ -674,6 +719,10 @@ static void pmw3360_async_init(struct k_work *work) {
 
         LOG_INF("PMW3360 init attempt %d/%d: product=0x%02x revision=0x%02x",
                 attempt, PMW3360_INIT_RETRIES, product_id, revision_id);
+        if (config->pmw3389 != (product_id == PMW3389_PRODUCT_ID)) {
+            LOG_WRN("Product id 0x%02x does not match the pmw3389 = %s setting; CPI will be wrong",
+                    product_id, config->pmw3389 ? "true" : "false");
+        }
 
         uint8_t control = 0;
         if (config->rotate_90) {
@@ -690,7 +739,10 @@ static void pmw3360_async_init(struct k_work *work) {
             control = PMW3360_CONTROL_ROTATE_270;
         }
 
-        if (control != 0) {
+        if (control != 0 && config->pmw3389) {
+            /* 0x0D is Ripple_Control on the PMW3389; use invert-x/invert-y instead. */
+            LOG_WRN("rotate-* is not supported on the PMW3389 and is ignored");
+        } else if (control != 0) {
             err = pmw3360_spi_write_reg(dev, PMW3360_REG_CONTROL, control);
             if (err < 0) {
                 LOG_WRN("PMW3360 init attempt %d/%d: control write failed: %d",
@@ -858,6 +910,13 @@ static int pmw3360_init(const struct device *dev) {
     }
     data->irq_configured = true;
 
+    if (config->enable_at_boot) {
+        int err = zmk_driver_pmw3360_set_enabled(dev, true);
+        if (err < 0) {
+            LOG_ERR("enable-at-boot failed: %d", err);
+        }
+    }
+
     return 0;
 }
 
@@ -928,7 +987,11 @@ int zmk_driver_pmw3360_set_enabled(const struct device *dev, bool enabled) {
  * @return CPI rounded down to the nearest 100-CPI step and clamped into the
  *         driver's supported runtime range.
  */
-static uint16_t pmw3360_normalize_cpi(uint16_t cpi) {
+static uint16_t pmw3360_normalize_cpi(const struct device *dev, uint16_t cpi) {
+    const struct pmw3360_config *config = dev->config;
+    if (config->pmw3389) {
+        return CLAMP((cpi / PMW3389_CPI_STEP) * PMW3389_CPI_STEP, PMW3389_CPI_STEP, PMW3389_CPI_MAX);
+    }
     if (cpi < 100) {
         cpi = 100;
     }
@@ -957,7 +1020,7 @@ int zmk_driver_pmw3360_set_cpi(const struct device *dev, uint16_t cpi) {
     }
 
     struct pmw3360_data *data = dev->data;
-    cpi = pmw3360_normalize_cpi(cpi);
+    cpi = pmw3360_normalize_cpi(dev, cpi);
 
     k_mutex_lock(&data->mutex, K_FOREVER);
     const uint16_t previous_cpi = data->cpi;
@@ -1075,6 +1138,8 @@ static const struct sensor_driver_api pmw3360_driver_api = {
         .polling_interval = DT_PROP(DT_DRV_INST(n), polling_interval),                             \
         .invert_x = DT_PROP(DT_DRV_INST(n), invert_x),                                             \
         .invert_y = DT_PROP(DT_DRV_INST(n), invert_y),                                             \
+        .pmw3389 = DT_PROP(DT_DRV_INST(n), pmw3389),                                               \
+        .enable_at_boot = DT_PROP(DT_DRV_INST(n), enable_at_boot),                                 \
     };                                                                                             \
     DEVICE_DT_INST_DEFINE(n, pmw3360_init, NULL, &data##n, &config##n, POST_KERNEL,                \
         CONFIG_INPUT_INIT_PRIORITY, &pmw3360_driver_api);
