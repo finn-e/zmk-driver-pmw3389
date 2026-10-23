@@ -830,8 +830,11 @@ static void pmw3360_async_init(struct k_work *work) {
             goto retry;
         }
 
-        if (config->lift_height_3mm) {
-            err = pmw3360_spi_write_reg(dev, PMW3360_REG_LIFT_CONFIG, PMW3360_LIFT_CONFIG_3MM);
+        /* Always write Lift_Config (QMK does too) rather than rely on the reset default. */
+        {
+            err = pmw3360_spi_write_reg(dev, PMW3360_REG_LIFT_CONFIG,
+                                        config->lift_height_3mm ? PMW3360_LIFT_CONFIG_3MM
+                                                                : PMW3360_LIFT_CONFIG_2MM);
             if (err < 0) {
                 LOG_WRN("PMW3360 init attempt %d/%d: lift-config write failed: %d",
                         attempt, PMW3360_INIT_RETRIES, err);
@@ -1005,9 +1008,9 @@ int zmk_driver_pmw3360_set_enabled(const struct device *dev, bool enabled) {
 
     /* Allow rails/oscillator to settle a bit before SPI init. */
 #if defined(CONFIG_INPUT_PIXART_PMW3360_USE_OWN_THREAD)
-    k_work_schedule_for_queue(&data->driver_work_queue, &data->init_work, K_MSEC(100));
+    k_work_schedule_for_queue(&data->driver_work_queue, &data->init_work, K_MSEC(CONFIG_INPUT_PIXART_PMW3360_INIT_DELAY_MS));
 #else
-    k_work_schedule(&data->init_work, K_MSEC(100));
+    k_work_schedule(&data->init_work, K_MSEC(CONFIG_INPUT_PIXART_PMW3360_INIT_DELAY_MS));
 #endif
     return 0;
 }

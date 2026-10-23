@@ -55,3 +55,10 @@ config INPUT_PIXART_PMW3360_DEBUG_RAW
     help
       Every 2 s log Product/Inverse/Revision ID, SROM_ID, resolution and Config2, and
       rate-limit log the raw motion burst bytes. Debug only; it adds SPI traffic.
+
+config INPUT_PIXART_PMW3360_INIT_DELAY_MS
+    int "Delay between enabling the sensor and starting its init sequence (ms)"
+    default 100
+    help
+      Time to let the sensor's supply and oscillator settle before the SPI reset and
+      register programming. Raise this if the sensor reports lift/fault right after boot.
