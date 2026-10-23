@@ -128,3 +128,10 @@ properties:
     description: |
       Power up and initialize the sensor during driver init. Without this the driver
       stays disabled until firmware calls zmk_driver_pmw3360_set_enabled().
+
+  lift-config:
+    type: int
+    description: |
+      Raw value for the Lift_Config register (0x63). Overrides lift-height-3mm. The Svalboard
+      QMK firmware writes 0 so that balls at different shim heights still track; the chip
+      default is 2.

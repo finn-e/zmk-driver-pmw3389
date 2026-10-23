@@ -841,8 +841,10 @@ static void pmw3360_async_init(struct k_work *work) {
         /* Always write Lift_Config (QMK does too) rather than rely on the reset default. */
         {
             err = pmw3360_spi_write_reg(dev, PMW3360_REG_LIFT_CONFIG,
-                                        config->lift_height_3mm ? PMW3360_LIFT_CONFIG_3MM
-                                                                : PMW3360_LIFT_CONFIG_2MM);
+                                        config->lift_config != 0xFF
+                                            ? config->lift_config
+                                            : (config->lift_height_3mm ? PMW3360_LIFT_CONFIG_3MM
+                                                                       : PMW3360_LIFT_CONFIG_2MM));
             if (err < 0) {
                 LOG_WRN("PMW3360 init attempt %d/%d: lift-config write failed: %d",
                         attempt, PMW3360_INIT_RETRIES, err);
@@ -1184,6 +1186,7 @@ static const struct sensor_driver_api pmw3360_driver_api = {
         .invert_y = DT_PROP(DT_DRV_INST(n), invert_y),                                             \
         .pmw3389 = DT_PROP(DT_DRV_INST(n), pmw3389),                                               \
         .enable_at_boot = DT_PROP(DT_DRV_INST(n), enable_at_boot),                                 \
+        .lift_config = DT_PROP_OR(DT_DRV_INST(n), lift_config, 0xFF),                                 \
     };                                                                                             \
     DEVICE_DT_INST_DEFINE(n, pmw3360_init, NULL, &data##n, &config##n, POST_KERNEL,                \
         CONFIG_INPUT_INIT_PRIORITY, &pmw3360_driver_api);

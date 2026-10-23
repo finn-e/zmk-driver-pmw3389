@@ -173,6 +173,8 @@ struct pmw3360_config {
     bool pmw3389;
     /** Enable (power up and initialize) the sensor at boot instead of waiting for a caller. */
     bool enable_at_boot;
+    /** Raw Lift_Config register value, or 0xFF to derive it from lift-height-3mm. */
+    uint8_t lift_config;
 };
 
 #ifdef __cplusplus
